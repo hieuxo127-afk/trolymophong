@@ -34,7 +34,7 @@ export async function callGeminiAI(
       contents: prompt,
       config: {
         temperature: 0.7,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 16384,
       },
     });
 
@@ -96,9 +96,25 @@ export async function generateSimulation(
   if (!response) throw new Error('Không nhận được phản hồi từ AI');
 
   try {
-    // Extract JSON from response (sometimes AI wraps it in \`\`\`json ... \`\`\`)
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : response;
+    // Remove markdown code fences if present
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+    
+    // Find the outermost JSON object by matching braces
+    const startIdx = cleaned.indexOf('{');
+    if (startIdx === -1) throw new Error('Không tìm thấy JSON trong phản hồi');
+    
+    let depth = 0;
+    let endIdx = -1;
+    for (let i = startIdx; i < cleaned.length; i++) {
+      if (cleaned[i] === '{') depth++;
+      else if (cleaned[i] === '}') {
+        depth--;
+        if (depth === 0) { endIdx = i; break; }
+      }
+    }
+    
+    const jsonStr = endIdx !== -1 ? cleaned.substring(startIdx, endIdx + 1) : cleaned.substring(startIdx);
     const parsed = JSON.parse(jsonStr);
     return {
       html: parsed.html || '',
@@ -106,8 +122,8 @@ export async function generateSimulation(
       practiceQuestions: parsed.practiceQuestions || [],
       teacherGuide: parsed.teacherGuide || { objectives: [], steps: [], tips: [] },
     };
-  } catch (e) {
-    console.error('Lỗi parse JSON từ AI:', response);
-    throw new Error('Phản hồi từ AI không đúng định dạng JSON');
+  } catch (e: any) {
+    console.error('Lỗi parse JSON từ AI:', e?.message, '\nResponse:', response?.substring(0, 500));
+    throw new Error('Phản hồi từ AI không đúng định dạng JSON. Vui lòng thử lại.');
   }
 }
