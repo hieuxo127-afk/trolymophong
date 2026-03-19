@@ -101,7 +101,7 @@ export const SimulationPlayer: React.FC<SimulationPlayerProps> = ({ simulation }
   </div>
   <div class="app-layout">
     <div class="sim-area">
-      <iframe id="simFrame" sandbox="allow-scripts"></iframe>
+      <iframe id="simFrame"></iframe>
     </div>
     <div class="control-panel">
       <div class="panel-title">
@@ -113,20 +113,12 @@ export const SimulationPlayer: React.FC<SimulationPlayerProps> = ({ simulation }
     </div>
   </div>
   <div class="footer">Được tạo bởi Thầy Hiếu AI Lab • Mô phỏng thí nghiệm tương tác</div>
-
-  <script>
+` + '<scr' + 'ipt>' + `
     var simHtml = ${JSON.stringify(simulation.htmlCode)};
     
     // Inject message listener into simulation HTML
-    var enhancedHtml = simHtml + \`
-      <script>
-        window.addEventListener('message', function(event) {
-          if (event.data.type === 'UPDATE_PARAMS' && typeof updateSimulation === 'function') {
-            updateSimulation(event.data.params);
-          }
-        });
-      <\\/script>
-    \`;
+    var listenerScript = '<scr' + 'ipt>window.addEventListener("message", function(event) { if (event.data.type === "UPDATE_PARAMS" && typeof updateSimulation === "function") { updateSimulation(event.data.params); } });</' + 'scr' + 'ipt>';
+    var enhancedHtml = simHtml + listenerScript;
     
     var iframe = document.getElementById('simFrame');
     iframe.srcdoc = enhancedHtml;
@@ -147,7 +139,7 @@ export const SimulationPlayer: React.FC<SimulationPlayerProps> = ({ simulation }
       var params = { ${defaultParamsJS} };
       iframe.contentWindow.postMessage({ type: 'UPDATE_PARAMS', params: params }, '*');
     });
-  </script>
+` + '</' + 'scr' + 'ipt>' + `
 </body>
 </html>`;
 
@@ -462,3 +454,4 @@ export const SimulationPlayer: React.FC<SimulationPlayerProps> = ({ simulation }
     </div>
   );
 };
+v
