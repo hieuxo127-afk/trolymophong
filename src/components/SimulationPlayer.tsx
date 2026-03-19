@@ -454,4 +454,3 @@ export const SimulationPlayer: React.FC<SimulationPlayerProps> = ({ simulation }
     </div>
   );
 };
-v
