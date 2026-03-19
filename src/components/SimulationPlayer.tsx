@@ -114,7 +114,7 @@ export const SimulationPlayer: React.FC<SimulationPlayerProps> = ({ simulation }
   </div>
   <div class="footer">Được tạo bởi Thầy Hiếu AI Lab • Mô phỏng thí nghiệm tương tác</div>
 ` + '<scr' + 'ipt>' + `
-    var simHtml = ${JSON.stringify(simulation.htmlCode)};
+    var simHtml = ${JSON.stringify(simulation.htmlCode).replace(/<\//g, '<\\/')};
     
     // Inject message listener into simulation HTML
     var listenerScript = '<scr' + 'ipt>window.addEventListener("message", function(event) { if (event.data.type === "UPDATE_PARAMS" && typeof updateSimulation === "function") { updateSimulation(event.data.params); } });</' + 'scr' + 'ipt>';
