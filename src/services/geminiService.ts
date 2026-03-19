@@ -96,34 +96,64 @@ export async function generateSimulation(
   if (!response) throw new Error('Không nhận được phản hồi từ AI');
 
   try {
-    // Remove markdown code fences if present
+    // Strategy 1: Clean markdown fences and try direct parse
     let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
+    cleaned = cleaned.trim();
     
-    // Find the outermost JSON object by matching braces
-    const startIdx = cleaned.indexOf('{');
-    if (startIdx === -1) throw new Error('Không tìm thấy JSON trong phản hồi');
-    
-    let depth = 0;
-    let endIdx = -1;
-    for (let i = startIdx; i < cleaned.length; i++) {
-      if (cleaned[i] === '{') depth++;
-      else if (cleaned[i] === '}') {
-        depth--;
-        if (depth === 0) { endIdx = i; break; }
+    // Strategy 2: Try parsing the cleaned response directly
+    try {
+      const parsed = JSON.parse(cleaned);
+      return {
+        html: parsed.html || '',
+        parameters: parsed.parameters || [],
+        practiceQuestions: parsed.practiceQuestions || [],
+        teacherGuide: parsed.teacherGuide || { objectives: [], steps: [], tips: [] },
+      };
+    } catch (_) {
+      // Continue to next strategy
+    }
+
+    // Strategy 3: Greedy match — from first { to last }
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const jsonStr = cleaned.substring(firstBrace, lastBrace + 1);
+      try {
+        const parsed = JSON.parse(jsonStr);
+        return {
+          html: parsed.html || '',
+          parameters: parsed.parameters || [],
+          practiceQuestions: parsed.practiceQuestions || [],
+          teacherGuide: parsed.teacherGuide || { objectives: [], steps: [], tips: [] },
+        };
+      } catch (_) {
+        // Continue to next strategy
       }
     }
-    
-    const jsonStr = endIdx !== -1 ? cleaned.substring(startIdx, endIdx + 1) : cleaned.substring(startIdx);
-    const parsed = JSON.parse(jsonStr);
-    return {
-      html: parsed.html || '',
-      parameters: parsed.parameters || [],
-      practiceQuestions: parsed.practiceQuestions || [],
-      teacherGuide: parsed.teacherGuide || { objectives: [], steps: [], tips: [] },
-    };
+
+    // Strategy 4: Try progressively shorter substrings from the last }
+    if (firstBrace !== -1) {
+      for (let i = lastBrace; i > firstBrace; i--) {
+        if (cleaned[i] === '}') {
+          try {
+            const parsed = JSON.parse(cleaned.substring(firstBrace, i + 1));
+            return {
+              html: parsed.html || '',
+              parameters: parsed.parameters || [],
+              practiceQuestions: parsed.practiceQuestions || [],
+              teacherGuide: parsed.teacherGuide || { objectives: [], steps: [], tips: [] },
+            };
+          } catch (_) {
+            continue;
+          }
+        }
+      }
+    }
+
+    throw new Error('Không thể trích xuất JSON từ phản hồi');
   } catch (e: any) {
-    console.error('Lỗi parse JSON từ AI:', e?.message, '\nResponse:', response?.substring(0, 500));
+    console.error('Lỗi parse JSON từ AI:', e?.message, '\nResponse (500 chars):', response?.substring(0, 500));
     throw new Error('Phản hồi từ AI không đúng định dạng JSON. Vui lòng thử lại.');
   }
 }
