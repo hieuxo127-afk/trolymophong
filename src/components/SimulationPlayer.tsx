@@ -34,7 +34,124 @@ export const SimulationPlayer: React.FC<SimulationPlayerProps> = ({ simulation }
   };
 
   const downloadHtml = () => {
-    const blob = new Blob([simulation.htmlCode], { type: 'text/html' });
+    // Tạo file HTML tự chứa (self-contained) với các thanh trượt thông số
+    const paramSliders = simulation.parameters.map(p => `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <label style="font-size:13px;font-weight:600;color:#334155">${p.label}</label>
+          <span id="val_${p.name}" style="font-size:13px;font-weight:700;color:#059669">${p.defaultValue} ${p.unit}</span>
+        </div>
+        <input type="range" id="slider_${p.name}" 
+          min="${p.min}" max="${p.max}" step="${p.step}" value="${p.defaultValue}"
+          style="width:100%;height:6px;border-radius:4px;outline:none;accent-color:#059669;cursor:pointer"
+          oninput="onParamChange()" />
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:2px">
+          <span>${p.min} ${p.unit}</span><span>${p.max} ${p.unit}</span>
+        </div>
+      </div>
+    `).join('');
+
+    const paramJS = simulation.parameters.map(p => 
+      `params['${p.name}'] = parseFloat(document.getElementById('slider_${p.name}').value);
+       document.getElementById('val_${p.name}').textContent = params['${p.name}'] + ' ${p.unit}';`
+    ).join('\n        ');
+
+    const defaultParamsJS = simulation.parameters.map(p => 
+      `'${p.name}': ${p.defaultValue}`
+    ).join(', ');
+
+    const resetJS = simulation.parameters.map(p =>
+      `document.getElementById('slider_${p.name}').value = ${p.defaultValue};`
+    ).join('\n          ');
+
+    const fullHtml = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${simulation.title} - Thầy Hiếu AI Lab</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; }
+    .app-header { background: linear-gradient(135deg, #059669, #0d9488); color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    .app-header h1 { font-size: 18px; font-weight: 700; }
+    .app-header .subtitle { font-size: 11px; opacity: 0.8; margin-top: 2px; }
+    .app-layout { display: flex; gap: 0; min-height: calc(100vh - 56px); }
+    .sim-area { flex: 1; background: #0f172a; position: relative; }
+    .sim-area iframe { width: 100%; height: 100%; border: none; min-height: 500px; }
+    .control-panel { width: 320px; background: white; border-left: 1px solid #e2e8f0; padding: 24px; overflow-y: auto; }
+    .panel-title { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+    .panel-title svg { width: 16px; height: 16px; color: #059669; }
+    .btn-reset { font-size: 11px; color: #059669; cursor: pointer; background: none; border: none; font-weight: 600; margin-left: auto; }
+    .btn-reset:hover { text-decoration: underline; }
+    .footer { background: #ecfdf5; border-top: 1px solid #a7f3d0; padding: 12px 24px; text-align: center; font-size: 11px; color: #059669; }
+    @media (max-width: 768px) {
+      .app-layout { flex-direction: column; }
+      .control-panel { width: 100%; border-left: none; border-top: 1px solid #e2e8f0; }
+      .sim-area iframe { min-height: 350px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-header">
+    <div>
+      <h1>🔬 ${simulation.title}</h1>
+      <div class="subtitle">${simulation.description || simulation.subjectId}</div>
+    </div>
+  </div>
+  <div class="app-layout">
+    <div class="sim-area">
+      <iframe id="simFrame" sandbox="allow-scripts"></iframe>
+    </div>
+    <div class="control-panel">
+      <div class="panel-title">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        Thông số thí nghiệm
+        <button class="btn-reset" onclick="resetParams()">↺ Đặt lại</button>
+      </div>
+      ${paramSliders}
+    </div>
+  </div>
+  <div class="footer">Được tạo bởi Thầy Hiếu AI Lab • Mô phỏng thí nghiệm tương tác</div>
+
+  <script>
+    var simHtml = ${JSON.stringify(simulation.htmlCode)};
+    
+    // Inject message listener into simulation HTML
+    var enhancedHtml = simHtml + \`
+      <script>
+        window.addEventListener('message', function(event) {
+          if (event.data.type === 'UPDATE_PARAMS' && typeof updateSimulation === 'function') {
+            updateSimulation(event.data.params);
+          }
+        });
+      <\\/script>
+    \`;
+    
+    var iframe = document.getElementById('simFrame');
+    iframe.srcdoc = enhancedHtml;
+
+    function onParamChange() {
+      var params = {};
+      ${paramJS}
+      iframe.contentWindow.postMessage({ type: 'UPDATE_PARAMS', params: params }, '*');
+    }
+
+    function resetParams() {
+      ${resetJS}
+      onParamChange();
+    }
+
+    // Initial update after iframe loads
+    iframe.addEventListener('load', function() {
+      var params = { ${defaultParamsJS} };
+      iframe.contentWindow.postMessage({ type: 'UPDATE_PARAMS', params: params }, '*');
+    });
+  </script>
+</body>
+</html>`;
+
+    const blob = new Blob([fullHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
